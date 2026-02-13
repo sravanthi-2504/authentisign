@@ -15,7 +15,7 @@ np.random.seed(42)
 tf.random.set_seed(42)
 
 class CEDARPairGenerator(tf.keras.utils.Sequence):
-    def __init__(self, dataset_path, batch_size=16, input_shape=(128,128,1) , **kwargs):
+    def __init__(self, dataset_path, batch_size=16, input_shape=(128,128,1), mode="train", **kwargs):
         super().__init__(**kwargs)
         self.batch_size = batch_size
         self.input_shape = input_shape
@@ -46,10 +46,20 @@ class CEDARPairGenerator(tf.keras.utils.Sequence):
             if writer_id in self.writers:
                 self.writers[writer_id]["forged"].append(img_path)
         self.writer_ids = list(self.writers.keys())
+        # 🔥 Split 80% train, 20% validation
+        split_index = int(len(self.writer_ids) * 0.8)
+        self.train_writers = self.writer_ids[:split_index]
+        self.val_writers = self.writer_ids[split_index:]
+
+        self.mode = mode
+
+        print(f"Loaded {len(self.writer_ids)} writers")
+        print(f"Train writers: {len(self.train_writers)}")
+        print(f"Validation writers: {len(self.val_writers)}")
         print(f"Loaded {len(self.writer_ids)} writers from CEDAR dataset")
 
     def __len__(self):
-        return 100  # steps per epoch
+        return 400  # steps per epoch
 
     def preprocess(self, path):
         img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
@@ -69,7 +79,8 @@ class CEDARPairGenerator(tf.keras.utils.Sequence):
         X1, X2, y = [], [], []
 
         while len(X1) < self.batch_size:
-            writer = np.random.choice(self.writer_ids)
+            writer_list = self.train_writers if self.mode == "train" else self.val_writers
+            writer = np.random.choice(writer_list)
             genuine = self.writers[writer]["genuine"]
             forged = self.writers[writer]["forged"]
 
@@ -167,7 +178,15 @@ class SignatureVerificationModel:
         train_generator = CEDARPairGenerator(
             dataset_path=data_dir,
             batch_size=batch_size,
-            input_shape=self.input_shape
+            input_shape=self.input_shape,
+            mode="train"
+        )
+
+        val_generator = CEDARPairGenerator(
+            dataset_path=data_dir,
+            batch_size=batch_size,
+            input_shape=self.input_shape,
+            mode="val"
         )
 
         print("\nBuilding model...")
@@ -184,12 +203,12 @@ class SignatureVerificationModel:
         # Callbacks
         callbacks = [
             keras.callbacks.EarlyStopping(
-                monitor='loss',
+                monitor='val_loss',
                 patience=5,
                 restore_best_weights=True
             ),
             keras.callbacks.ReduceLROnPlateau(
-                monitor='loss',
+                monitor='val_loss',
                 factor=0.5,
                 patience=3,
                 min_lr=1e-7
@@ -199,10 +218,12 @@ class SignatureVerificationModel:
         print("\nTraining...")
         self.history = self.model.fit(
             train_generator,
+            validation_data=val_generator,
             epochs=epochs,
             callbacks=callbacks,
             verbose=1
         )
+
 
         return self.history
 
@@ -230,7 +251,7 @@ if __name__ == "__main__":
 
     model.train(
         data_dir=dataset_path,
-        epochs=30,
+        epochs=45,
         batch_size=16
     )
 
