@@ -1,185 +1,196 @@
 import React, { useState } from 'react';
-import { Shield, Mail, Lock, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ShieldCheck, Mail, Lock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const AuthPage = ({ onLogin }) => {
+const AuthPage = () => {
     const [isLogin, setIsLogin] = useState(true);
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        name: ''
-    });
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleChange = (e) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
-        setError('');
-    };
+    const { login, signup } = useAuth();
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
-        const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-
         try {
-            const response = await fetch(`http://localhost:5000${endpoint}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(formData)
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                if (isLogin) {
-                    onLogin(data.token, data.user);
-                } else {
-                    // After registration, automatically login
-                    setIsLogin(true);
-                    setError('Registration successful! Please login.');
-                }
+            if (isLogin) {
+                await login(email, password);
             } else {
-                setError(data.error || 'Authentication failed');
+                await signup(email, password);
             }
-        } catch (error) {
-            setError('Network error. Please check if the backend is running.');
+            navigate('/dashboard');
+        } catch (err) {
+            setError(err.message || 'Authentication failed');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="auth-container">
-            <div className="auth-background">
-                <div className="gradient-orb orb-1"></div>
-                <div className="gradient-orb orb-2"></div>
-                <div className="gradient-orb orb-3"></div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+            {/* Background Effects */}
+            <div className="absolute inset-0 overflow-hidden">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow delay-1000"></div>
             </div>
 
-            <div className="auth-card">
-                <div className="auth-header">
-                    <div className="auth-logo">
-                        <Shield size={48} />
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="relative z-10 w-full max-w-md"
+            >
+                {/* Logo */}
+                <div className="text-center mb-8">
+                    <div className="flex items-center justify-center mb-4">
+                        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-500/20">
+                            <ShieldCheck className="w-10 h-10 text-white" />
+                        </div>
                     </div>
-                    <h1>AI Signature Verification</h1>
-                    <p>Secure authentication powered by artificial intelligence</p>
+                    <h1 className="text-4xl font-bold text-white mb-2">
+            <span className="bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">
+              AuthentiSign
+            </span>
+                    </h1>
+                    <p className="text-slate-400 text-lg">AI Signature Verification</p>
+                    <p className="text-slate-500 text-sm mt-1">Secure authentication powered by artificial intelligence</p>
                 </div>
 
-                <div className="auth-tabs">
-                    <button
-                        className={`auth-tab ${isLogin ? 'active' : ''}`}
-                        onClick={() => setIsLogin(true)}
-                    >
-                        Login
-                    </button>
-                    <button
-                        className={`auth-tab ${!isLogin ? 'active' : ''}`}
-                        onClick={() => setIsLogin(false)}
-                    >
-                        Sign Up
-                    </button>
-                </div>
+                {/* Auth Card */}
+                <motion.div
+                    className="bg-slate-900/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden"
+                    whileHover={{ boxShadow: "0 0 40px rgba(16, 185, 129, 0.1)" }}
+                >
+                    {/* Tab Switcher */}
+                    <div className="flex border-b border-slate-800">
+                        <button
+                            onClick={() => setIsLogin(true)}
+                            className={`flex-1 py-4 text-center font-semibold transition-all duration-300 ${
+                                isLogin
+                                    ? 'text-white bg-emerald-500/10 border-b-2 border-emerald-500'
+                                    : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                        >
+                            Login
+                        </button>
+                        <button
+                            onClick={() => setIsLogin(false)}
+                            className={`flex-1 py-4 text-center font-semibold transition-all duration-300 ${
+                                !isLogin
+                                    ? 'text-white bg-emerald-500/10 border-b-2 border-emerald-500'
+                                    : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                        >
+                            Sign Up
+                        </button>
+                    </div>
 
-                <form onSubmit={handleSubmit} className="auth-form">
-                    {!isLogin && (
-                        <div className="form-group">
-                            <label htmlFor="name">Full Name</label>
-                            <div className="input-wrapper">
-                                <User size={18} />
-                                <input
-                                    type="text"
-                                    id="name"
-                                    name="name"
-                                    placeholder="Enter your name"
-                                    value={formData.name}
-                                    onChange={handleChange}
-                                    required={!isLogin}
-                                />
+                    {/* Form */}
+                    <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                        {error && (
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400"
+                            >
+                                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                                <p className="text-sm">{error}</p>
+                            </motion.div>
+                        )}
+
+                        <div className="space-y-4">
+                            {/* Email Field */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Email Address
+                                </label>
+                                <div className="relative">
+                                    <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Enter your email"
+                                        className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Password Field */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    Password
+                                </label>
+                                <div className="relative">
+                                    <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="Enter your password"
+                                        className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                                        required
+                                        minLength={6}
+                                    />
+                                </div>
+                                {!isLogin && (
+                                    <p className="mt-2 text-xs text-slate-500">Password must be at least 6 characters</p>
+                                )}
                             </div>
                         </div>
-                    )}
 
-                    <div className="form-group">
-                        <label htmlFor="email">Email Address</label>
-                        <div className="input-wrapper">
-                            <Mail size={18} />
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                placeholder="Enter your email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                required
-                            />
-                        </div>
-                    </div>
+                        {/* Submit Button */}
+                        <motion.button
+                            type="submit"
+                            disabled={loading}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {loading ? (
+                                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+                            ) : (
+                                <span>{isLogin ? 'Login' : 'Create Account'}</span>
+                            )}
+                        </motion.button>
 
-                    <div className="form-group">
-                        <label htmlFor="password">Password</label>
-                        <div className="input-wrapper">
-                            <Lock size={18} />
-                            <input
-                                type="password"
-                                id="password"
-                                name="password"
-                                placeholder="Enter your password"
-                                value={formData.password}
-                                onChange={handleChange}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div className={`auth-message ${error.includes('successful') ? 'success' : 'error'}`}>
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        className="auth-submit-btn"
-                        disabled={loading}
-                    >
-                        {loading ? (
-                            <>
-                                <div className="btn-spinner"></div>
-                                <span>Processing...</span>
-                            </>
-                        ) : (
-                            <span>{isLogin ? 'Login' : 'Sign Up'}</span>
+                        {/* Footer Text */}
+                        {isLogin && (
+                            <div className="text-center">
+                                <p className="text-slate-500 text-sm">
+                                    Don't have an account?{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsLogin(false)}
+                                        className="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors"
+                                    >
+                                        Sign up
+                                    </button>
+                                </p>
+                            </div>
                         )}
-                    </button>
-                </form>
+                    </form>
+                </motion.div>
 
-                <div className="auth-footer">
-                    {isLogin ? (
-                        <p>
-                            Don't have an account?{' '}
-                            <button onClick={() => setIsLogin(false)}>Sign up</button>
-                        </p>
-                    ) : (
-                        <p>
-                            Already have an account?{' '}
-                            <button onClick={() => setIsLogin(true)}>Login</button>
-                        </p>
-                    )}
-                </div>
-
-                <div className="demo-credentials">
-                    <p><strong>Demo Credentials:</strong></p>
-                    <p>Email: bsonakshi@gmail.com</p>
-                    <p>Password: password123</p>
-                </div>
-            </div>
+                {/* Additional Info */}
+                <p className="text-center text-slate-600 text-xs mt-6">
+                    By continuing, you agree to our Terms of Service and Privacy Policy
+                </p>
+            </motion.div>
         </div>
     );
 };
