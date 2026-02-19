@@ -36,7 +36,7 @@ class CEDARPairGenerator(tf.keras.utils.Sequence):
             self.writers[writer_id]["genuine"].append(img_path)
 
 
-    # Collect forged signatures
+        # Collect forged signatures
         for img_path in forg_path.glob("*.png"):
             parts = img_path.stem.split('_')
             if len(parts) < 3:
@@ -84,16 +84,16 @@ class CEDARPairGenerator(tf.keras.utils.Sequence):
             genuine = self.writers[writer]["genuine"]
             forged = self.writers[writer]["forged"]
 
-        # Skip invalid writers
+            # Skip invalid writers
             if len(genuine) < 2:
                 continue
 
             if np.random.rand() < 0.5:
-            # Genuine pair
+                # Genuine pair
                 img1, img2 = np.random.choice(genuine, 2, replace=False)
                 label = 1
             else:
-            # Forged pair
+                # Forged pair
                 if len(forged) < 1:
                     continue
                 img1 = np.random.choice(genuine)
@@ -172,60 +172,35 @@ class SignatureVerificationModel:
         self.model = Model([input_a, input_b], output)
         return self.model
 
-    def train(self, data_dir, epochs=30, batch_size=16):
+    def train(self, data_dir, epochs=20, batch_size=16):
+
         print("Creating dynamic generator...")
 
         train_generator = CEDARPairGenerator(
             dataset_path=data_dir,
             batch_size=batch_size,
-            input_shape=self.input_shape,
-            mode="train"
+            input_shape=self.input_shape
         )
 
-        val_generator = CEDARPairGenerator(
-            dataset_path=data_dir,
-            batch_size=batch_size,
-            input_shape=self.input_shape,
-            mode="val"
-        )
-
-        print("\nBuilding model...")
+        print("Building model...")
         self.create_siamese_network()
 
         self.model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+            optimizer=tf.keras.optimizers.Adam(0.0001),
             loss="binary_crossentropy",
             metrics=["accuracy"]
         )
 
         print(self.model.summary())
 
-        # Callbacks
-        callbacks = [
-            keras.callbacks.EarlyStopping(
-                monitor='val_loss',
-                patience=5,
-                restore_best_weights=True
-            ),
-            keras.callbacks.ReduceLROnPlateau(
-                monitor='val_loss',
-                factor=0.5,
-                patience=3,
-                min_lr=1e-7
-            )
-        ]
-
-        print("\nTraining...")
         self.history = self.model.fit(
             train_generator,
-            validation_data=val_generator,
             epochs=epochs,
-            callbacks=callbacks,
             verbose=1
         )
 
-
         return self.history
+
 
     def save_model(self, path="signature_model_final.h5"):
         """Save model"""
@@ -249,9 +224,10 @@ if __name__ == "__main__":
 
     model = SignatureVerificationModel()
 
+    # In train_model.py, change this line (around line 176):
     model.train(
         data_dir=dataset_path,
-        epochs=45,
+        epochs=50,  # ← Change from 30 to 50 or 100
         batch_size=16
     )
 

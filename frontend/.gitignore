@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+backend/venv/
+backend/__pycache__/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/package-lock.json
+
+# Model files
+*.h5
+*.keras
+
+# Dataset
+dataset/
+
+# Uploads
+backend/uploads/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store

@@ -1,230 +1,283 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Eye, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, CheckCircle, XCircle, Eye, FileText, Calendar, TrendingUp } from 'lucide-react';
 
 const VerificationHistory = () => {
     const [history, setHistory] = useState([]);
     const [filteredHistory, setFilteredHistory] = useState([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterStatus, setFilterStatus] = useState('All');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
-        fetchHistory();
+        // Load history from localStorage
+        const stored = JSON.parse(localStorage.getItem('verificationHistory') || '[]');
+        setHistory(stored);
+        setFilteredHistory(stored);
     }, []);
 
     useEffect(() => {
-        filterHistoryData();
-    }, [history, searchQuery, filterStatus]);
+        // Filter history based on search and status
+        let filtered = history;
 
-    const fetchHistory = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('http://localhost:5000/api/history', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                setHistory(data.history);
-                setFilteredHistory(data.history);
-            } else {
-                setError('Failed to load history');
-            }
-        } catch (error) {
-            setError('Network error. Please check if the backend is running.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const filterHistoryData = () => {
-        let filtered = [...history];
-
-        // Filter by status
-        if (filterStatus !== 'All') {
-            filtered = filtered.filter(item => item.status === filterStatus);
-        }
-
-        // Filter by search query
-        if (searchQuery) {
+        if (searchTerm) {
             filtered = filtered.filter(item =>
-                item.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                item.date.toLowerCase().includes(searchQuery.toLowerCase())
+                item.filename.toLowerCase().includes(searchTerm.toLowerCase())
             );
         }
 
+        if (statusFilter !== 'all') {
+            filtered = filtered.filter(item => item.status.toLowerCase() === statusFilter);
+        }
+
         setFilteredHistory(filtered);
+    }, [searchTerm, statusFilter, history]);
+
+    const getStats = () => {
+        const total = history.length;
+        const genuine = history.filter(h => h.status === 'GENUINE').length;
+        const forged = history.filter(h => h.status === 'FORGED').length;
+        const avgConfidence = history.length > 0
+            ? Math.round(history.reduce((sum, h) => sum + h.confidence, 0) / history.length)
+            : 0;
+
+        return { total, genuine, forged, avgConfidence };
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this entry?')) {
-            return;
-        }
+    const stats = getStats();
 
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:5000/api/history/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.ok) {
-                setHistory(history.filter(item => item.id !== id));
-            }
-        } catch (error) {
-            console.error('Delete failed:', error);
-        }
-    };
-
-    if (loading) {
-        return (
-            <div className="history-page">
-                <div className="loading-container">
-                    <div className="loading-spinner"></div>
-                    <p>Loading history...</p>
+    const StatCard = ({ icon: Icon, label, value, color }) => (
+        <motion.div
+            whileHover={{ scale: 1.02 }}
+            className="bg-slate-900/50 backdrop-blur-xl rounded-xl p-6 border border-slate-800"
+        >
+            <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${color}`}>
+                    <Icon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                    <p className="text-slate-400 text-sm">{label}</p>
+                    <p className="text-2xl font-bold text-white">{value}</p>
                 </div>
             </div>
-        );
-    }
+        </motion.div>
+    );
 
     return (
-        <div className="history-page">
-            <div className="page-header">
-                <h1>Verification History</h1>
-                <p>View all your past signature verification results</p>
-            </div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 lg:p-10">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-8"
+                >
+                    <h1 className="text-4xl font-bold text-white mb-2">Verification History</h1>
+                    <p className="text-slate-400 text-lg">View all your past signature verification results</p>
+                </motion.div>
 
-            <div className="history-controls">
-                <div className="search-bar">
-                    <Search size={20} />
-                    <input
-                        type="text"
-                        placeholder="Search by filename..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                {/* Stats Grid */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+                >
+                    <StatCard
+                        icon={FileText}
+                        label="Total Verifications"
+                        value={stats.total}
+                        color="bg-blue-500"
                     />
-                </div>
+                    <StatCard
+                        icon={CheckCircle}
+                        label="Genuine"
+                        value={stats.genuine}
+                        color="bg-emerald-500"
+                    />
+                    <StatCard
+                        icon={XCircle}
+                        label="Forged"
+                        value={stats.forged}
+                        color="bg-red-500"
+                    />
+                    <StatCard
+                        icon={TrendingUp}
+                        label="Avg Confidence"
+                        value={`${stats.avgConfidence}%`}
+                        color="bg-purple-500"
+                    />
+                </motion.div>
 
-                <div className="filter-buttons">
-                    <button
-                        className={`filter-btn ${filterStatus === 'All' ? 'active' : ''}`}
-                        onClick={() => setFilterStatus('All')}
-                    >
-                        All
-                    </button>
-                    <button
-                        className={`filter-btn genuine ${filterStatus === 'GENUINE' ? 'active' : ''}`}
-                        onClick={() => setFilterStatus('GENUINE')}
-                    >
-                        Genuine
-                    </button>
-                    <button
-                        className={`filter-btn forged ${filterStatus === 'FORGED' ? 'active' : ''}`}
-                        onClick={() => setFilterStatus('FORGED')}
-                    >
-                        Forged
-                    </button>
-                </div>
-            </div>
+                {/* Filters */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-slate-900/50 backdrop-blur-xl rounded-xl p-6 border border-slate-800 mb-6"
+                >
+                    <div className="flex flex-col md:flex-row gap-4">
+                        {/* Search */}
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-500" />
+                            <input
+                                type="text"
+                                placeholder="Search by filename..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                            />
+                        </div>
 
-            {error && (
-                <div className="error-message">
-                    {error}
-                </div>
-            )}
+                        {/* Filter Buttons */}
+                        <div className="flex gap-2">
+                            {['all', 'genuine', 'forged'].map((filter) => (
+                                <button
+                                    key={filter}
+                                    onClick={() => setStatusFilter(filter)}
+                                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                                        statusFilter === filter
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </motion.div>
 
-            {filteredHistory.length === 0 ? (
-                <div className="empty-state">
-                    <Filter size={64} />
-                    <h3>No verification history found</h3>
-                    <p>
-                        {searchQuery || filterStatus !== 'All'
-                            ? 'Try adjusting your filters'
-                            : 'Start verifying signatures to see your history here'}
-                    </p>
-                </div>
-            ) : (
-                <div className="history-table-container">
-                    <table className="history-table">
-                        <thead>
-                        <tr>
-                            <th>DATE & TIME</th>
-                            <th>FILENAME</th>
-                            <th>STATUS</th>
-                            <th>CONFIDENCE</th>
-                            <th>ACTIONS</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {filteredHistory.map((item) => (
-                            <tr key={item.id}>
-                                <td>
-                                    <div className="date-cell">
-                                        <span className="date-icon">📅</span>
-                                        <span>{item.date}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div className="filename-cell">
-                                        <span className="file-icon">📄</span>
-                                        <span>{item.filename}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div className={`status-badge ${item.status.toLowerCase()}`}>
-                                        {item.status === 'GENUINE' ? (
-                                            <CheckCircle2 size={16} />
-                                        ) : (
-                                            <XCircle size={16} />
-                                        )}
-                                        <span>{item.status}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div className="confidence-cell">
-                                        <div className="confidence-bar-small">
-                                            <div
-                                                className={`confidence-fill-small ${item.status.toLowerCase()}`}
-                                                style={{ width: `${item.confidence}%` }}
-                                            ></div>
+                {/* History Table */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-slate-800 overflow-hidden"
+                >
+                    {filteredHistory.length === 0 ? (
+                        <div className="p-12 text-center">
+                            <FileText className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+                            <p className="text-slate-400 text-lg">No verification history found</p>
+                            <p className="text-slate-600 text-sm mt-2">
+                                {searchTerm || statusFilter !== 'all'
+                                    ? 'Try adjusting your filters'
+                                    : 'Start by verifying some signatures'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                <tr className="bg-slate-800/50 border-b border-slate-700">
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="w-4 h-4" />
+                                            Date & Time
                                         </div>
-                                        <span className="confidence-text">{item.confidence}%</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div className="action-buttons">
-                                        <button
-                                            className="action-btn view"
-                                            title="View details"
-                                        >
-                                            <Eye size={16} />
-                                        </button>
-                                        <button
-                                            className="action-btn delete"
-                                            onClick={() => handleDelete(item.id)}
-                                            title="Delete"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        <div className="flex items-center gap-2">
+                                            <FileText className="w-4 h-4" />
+                                            Filename
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        Confidence
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                {filteredHistory.map((item, index) => (
+                                    <motion.tr
+                                        key={index}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: index * 0.05 }}
+                                        className="hover:bg-slate-800/30 transition-colors"
+                                    >
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-2 text-slate-300">
+                                                <Calendar className="w-4 h-4 text-slate-500" />
+                                                {new Date(item.timestamp).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-2 text-slate-300">
+                                                <FileText className="w-4 h-4 text-slate-500" />
+                                                {item.filename}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
+                                                item.status === 'GENUINE'
+                                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                                    : 'bg-red-500/20 text-red-400'
+                                            }`}>
+                                                {item.status === 'GENUINE' ? (
+                                                    <CheckCircle className="w-4 h-4" />
+                                                ) : (
+                                                    <XCircle className="w-4 h-4" />
+                                                )}
+                                                {item.status}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1">
+                                                    <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full ${
+                                                                item.status === 'GENUINE' ? 'bg-emerald-500' : 'bg-red-500'
+                                                            }`}
+                                                            style={{ width: `${item.confidence}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <span className="text-slate-300 font-semibold min-w-[3rem] text-right">
+                            {item.confidence}%
+                          </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <button
+                                                className="p-2 hover:bg-slate-700 rounded-lg transition-colors group"
+                                                title="View Details"
+                                            >
+                                                <Eye className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 transition-colors" />
+                                            </button>
+                                        </td>
+                                    </motion.tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
-            <div className="history-footer">
-                <p>Showing {filteredHistory.length} of {history.length} results</p>
+                    {/* Footer */}
+                    {filteredHistory.length > 0 && (
+                        <div className="px-6 py-4 bg-slate-800/30 border-t border-slate-800">
+                            <p className="text-sm text-slate-400">
+                                Showing <span className="text-white font-semibold">{filteredHistory.length}</span> of{' '}
+                                <span className="text-white font-semibold">{history.length}</span> results
+                            </p>
+                        </div>
+                    )}
+                </motion.div>
             </div>
         </div>
     );
 };
 
-export default VerificationHistory
+export default VerificationHistory;
