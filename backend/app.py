@@ -41,7 +41,7 @@ history_db = {}
 embedding_model = None
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "model", "signature_embedding_model.keras")
-THRESHOLD = 0.5
+THRESHOLD = 0.40
 
 
 def load_model():
