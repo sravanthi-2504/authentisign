@@ -1,100 +1,96 @@
+"""
+Fixed Signature Verification using Euclidean Distance
+(NOT probability - use distance as metric)
+"""
+
 import numpy as np
 import tensorflow as tf
 import cv2
 import os
+from pathlib import Path
 
-class SignatureVerifier:
+class SignatureVerifierFixed:
+    """
+    Load trained Siamese model and verify signatures
+    Uses EUCLIDEAN DISTANCE (not probability)
+    """
 
-    def __init__(self):
-        print("Loading trained model...")
-
-        # Make sure model loads correctly even if called from app.py
-        model_path = os.path.join(
-            os.path.dirname(__file__),
-            "../model/signature_model_final.keras"
-        )
+    def __init__(self, model_path=None):
+        if model_path is None:
+            model_path = os.path.join(
+                os.path.dirname(__file__),
+                "signature_model_final.keras"
+            )
 
         model_path = os.path.abspath(model_path)
 
-        self.model = tf.keras.models.load_model(
-            model_path,
-            compile=False
-        )
+        if not Path(model_path).exists():
+            raise FileNotFoundError(f"Model not found: {model_path}")
 
-        print("✓ Model loaded successfully")
+        print(f"Loading model: {model_path}")
+        self.model = tf.keras.models.load_model(model_path, compile=False)
+        print("✓ Model loaded")
 
         self.target_size = (128, 128)
-        # ✅ FIXED: Lowered threshold from 0.90 to 0.5
-        # Your model outputs: genuine=0.86-0.98, forged=0.0
-        # So 0.5 is the correct decision boundary
-        self.THRESHOLD = 0.85
+        # ✅ THRESHOLD = 0.4-0.6 (euclidean distance)
+        #    < 0.5 = GENUINE, >= 0.5 = FORGED
+        self.THRESHOLD = 0.5
 
-    def preprocess(self, image_bytes):
-        # Convert bytes to numpy array
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
-
+    def preprocess(self, image_path):
+        """Exact same preprocessing as training"""
+        img = cv2.imread(str(image_path), cv2.IMREAD_GRAYSCALE)
         if img is None:
-            raise ValueError("Invalid image")
+            raise ValueError(f"Cannot read: {image_path}")
 
-        # Resize (same as training)
         img = cv2.resize(img, self.target_size)
 
-        # EXACT SAME preprocessing as training
+        # Adaptive threshold
         img = cv2.adaptiveThreshold(
-            img,
-            255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            11,
-            2
+            img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 11, 2
         )
 
-        # Normalize
+        # Morphology
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel, iterations=1)
+
         img = img.astype("float32") / 255.0
+        return np.expand_dims(img, axis=-1)
 
-        # Add channel dimension
-        img = np.expand_dims(img, axis=-1)
-
-        return img
-
-    def verify(self, original_bytes, test_bytes):
+    def verify(self, original_path, test_path):
+        """Verify signature pair"""
         try:
-            img1 = self.preprocess(original_bytes)
-            img2 = self.preprocess(test_bytes)
+            img1 = np.expand_dims(self.preprocess(original_path), 0)
+            img2 = np.expand_dims(self.preprocess(test_path), 0)
 
-            # Add batch dimension
-            img1 = np.expand_dims(img1, axis=0)
-            img2 = np.expand_dims(img2, axis=0)
+            # Get euclidean distance
+            distance = float(self.model.predict([img1, img2], verbose=0)[0][0])
 
-            # Predict
-            prediction = float(
-                self.model.predict([img1, img2], verbose=0)[0][0]
-            )
+            # Decision
+            is_genuine = distance < self.THRESHOLD
 
-            # ✅ FIXED: Corrected decision logic
-            # Model outputs HIGH probability (>0.5) for GENUINE
-            # Model outputs LOW probability (<0.5) for FORGED
-            is_genuine = prediction > self.THRESHOLD
-
-            status = "GENUINE" if is_genuine else "FORGED"
-
-            # ✅ FIXED: Better confidence calculation
-            # Confidence should always be based on how far from the threshold
+            # Confidence based on distance from threshold
             if is_genuine:
-                # For genuine: how confident above threshold
-                confidence = int(prediction * 100)
+                confidence = max(0, (self.THRESHOLD - distance) / self.THRESHOLD * 100)
             else:
-                # For forged: how confident below threshold
-                confidence = int((1 - prediction) * 100)
+                confidence = max(0, (distance - self.THRESHOLD) / (2 - self.THRESHOLD) * 100)
 
             return {
-                "status": status,
-                "confidence": confidence,
-                "genuine_probability": round(prediction * 100, 2),
-                "forged_probability": round((1 - prediction) * 100, 2),
-                "raw_probability": round(prediction, 4)
+                "status": "GENUINE" if is_genuine else "FORGED",
+                "confidence": round(min(confidence, 99.99), 2),
+                "distance": round(distance, 4),
+                "threshold": self.THRESHOLD
             }
 
         except Exception as e:
             raise Exception(f"Verification failed: {str(e)}")
+
+
+if __name__ == "__main__":
+    verifier = SignatureVerifierFixed()
+
+    # Test
+    result = verifier.verify("sig1.png", "sig2.png")
+    print(f"Status: {result['status']}")
+    print(f"Distance: {result['distance']}")
+    print(f"Confidence: {result['confidence']}%")
