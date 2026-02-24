@@ -38,11 +38,20 @@ class Verifier:
         i1 = np.expand_dims(self.preprocess(p1),0)
         i2 = np.expand_dims(self.preprocess(p2),0)
 
-        e1 = self.model.predict(i1,verbose=0)[0]
-        e2 = self.model.predict(i2,verbose=0)[0]
+        e1 = self.model(i1, training=False).numpy()[0]
+        e2 = self.model(i2, training=False).numpy()[0]
 
-        d = np.sqrt(np.sum((e1-e2)**2))
-        status = "GENUINE" if d < THRESHOLD else "FORGED"
+        d = float(np.sqrt(np.sum((e1 - e2) ** 2)))
+        cosine_sim = float(np.dot(e1, e2))
+
+        L2_THRESHOLD = 0.30
+        COSINE_THRESHOLD = 0.99
+
+        status = "GENUINE" if (d < L2_THRESHOLD and cosine_sim > COSINE_THRESHOLD) else "FORGED"
+
+        print(f"\nL2 Distance : {round(d, 4)}")
+        print(f"Cosine Sim  : {round(cosine_sim, 4)}")
+        print(f"Result      : {status}")
 
         print("\nDistance:", round(d,4))
         print("Result:", status)

@@ -52,8 +52,22 @@ def load_model():
 
     if os.path.exists(MODEL_PATH):
         try:
-            embedding_model = tf.keras.models.load_model(MODEL_PATH, compile=False,safe_mode=False, custom_objects={"L2Normalization": L2Normalization})
-            print(f"✓ Model loaded\n")
+            embedding_model = tf.keras.models.load_model(
+                MODEL_PATH,
+                compile=False,
+                safe_mode=False,
+                custom_objects={"L2Normalization": L2Normalization}
+            )
+            # ✅ Force all layers into inference mode permanently
+            embedding_model.trainable = False
+            for layer in embedding_model.layers:
+                if hasattr(layer, 'training'):
+                    layer.training = False
+            # Rebuild once in inference mode to lock it
+            _ = embedding_model(
+                tf.zeros((1, 128, 128, 1)), training=False
+            )
+            print(f"✓ Model loaded and locked in inference mode\n")
             return True
         except Exception as e:
             print(f"✗ Error: {e}\n")
@@ -190,20 +204,29 @@ def verify_signature(current_user):
         img2 = preprocess(test_path)
 
         # Get embeddings
-        embed1 = embedding_model.predict(np.expand_dims(img1, 0), verbose=0)[0]
-        embed2 = embedding_model.predict(np.expand_dims(img2, 0), verbose=0)[0]
+        embed1 = embedding_model(np.expand_dims(img1, 0), training=False).numpy()[0]
+        embed2 = embedding_model(np.expand_dims(img2, 0), training=False).numpy()[0]
 
+        # L2 distance
         # L2 distance
         distance = float(np.sqrt(np.sum((embed1 - embed2) ** 2)))
 
-        # Decision
-        is_genuine = distance < THRESHOLD
+# Cosine similarity (works because embeddings are L2 normalized)
+        cosine_sim = float(np.dot(embed1, embed2))
+
+# Both must agree for GENUINE
+        L2_THRESHOLD = 0.30
+        COSINE_THRESHOLD = 0.99  # cosine: 1.0 = identical, 0.0 = unrelated
+
+        is_genuine = distance < L2_THRESHOLD
+
+        print(f"L2: {distance:.4f}, Cosine: {cosine_sim:.4f}")
 
         # Confidence
         if is_genuine:
-            confidence = (1.0 - distance / THRESHOLD) * 100
+            confidence = (1.0 - distance / L2_THRESHOLD) * 100
         else:
-            confidence = ((distance - THRESHOLD) / (2.0 - THRESHOLD)) * 100
+            confidence = ((distance - L2_THRESHOLD) / (2.0 - L2_THRESHOLD)) * 100
 
         result = {
             "status": "GENUINE" if is_genuine else "FORGED",
@@ -267,4 +290,4 @@ if __name__ == "__main__":
     print("="*70)
     print(f"  Model: {'✓ Loaded' if embedding_model else '✗ NOT LOADED'}\n")
 
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=False, host="0.0.0.0", port=5000)

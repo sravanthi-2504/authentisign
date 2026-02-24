@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, XCircle, RefreshCw, Image as ImageIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const API_URL = 'http://127.0.0.1:5001';
 
 const VerifySignature = () => {
     const [originalImage, setOriginalImage] = useState(null);
@@ -9,6 +12,9 @@ const VerifySignature = () => {
     const [testPreview, setTestPreview] = useState(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [result, setResult] = useState(null);
+    const [error, setError] = useState(null);
+
+    const { token } = useAuth();
 
     const originalInputRef = useRef(null);
     const testInputRef = useRef(null);
@@ -16,7 +22,6 @@ const VerifySignature = () => {
     const handleDrop = (e, type) => {
         e.preventDefault();
         e.stopPropagation();
-
         const file = e.dataTransfer.files[0];
         if (file && file.type.startsWith('image/')) {
             processFile(file, type);
@@ -25,9 +30,7 @@ const VerifySignature = () => {
 
     const handleFileSelect = (e, type) => {
         const file = e.target.files[0];
-        if (file) {
-            processFile(file, type);
-        }
+        if (file) processFile(file, type);
     };
 
     const processFile = (file, type) => {
@@ -40,8 +43,8 @@ const VerifySignature = () => {
                 setTestImage(file);
                 setTestPreview(e.target.result);
             }
-            // Reset result when new image is uploaded
             setResult(null);
+            setError(null);
         };
         reader.readAsDataURL(file);
     };
@@ -51,37 +54,38 @@ const VerifySignature = () => {
 
         setIsAnalyzing(true);
         setResult(null);
-
-        // Simulate AI analysis with FormData
-        const formData = new FormData();
-        formData.append('original', originalImage);
-        formData.append('test', testImage);
+        setError(null);
 
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            const formData = new FormData();
+            formData.append('original', originalImage);
+            formData.append('test', testImage);
 
-            // Simulate result - In production, replace with actual API call
-            // Example: const response = await fetch('/api/verify', { method: 'POST', body: formData });
-            const randomConfidence = Math.random();
-            const isGenuine = randomConfidence > 0.3;
+            const response = await fetch(`${API_URL}/api/verify-signature`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
 
-            const analysisResult = {
-                status: isGenuine ? 'GENUINE' : 'FORGED',
-                confidence: isGenuine ? Math.round((0.9 + Math.random() * 0.09) * 100) : Math.round((0.85 + Math.random() * 0.14) * 100),
-                timestamp: new Date().toISOString(),
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Verification failed');
+            }
+
+            const data = await response.json();
+            setResult({
+                status: data.status,
+                confidence: data.confidence,
+                distance: data.distance,
+                timestamp: data.timestamp,
                 filename: `signature_comparison_${Date.now()}.jpg`
-            };
+            });
 
-            setResult(analysisResult);
-
-            // Save to history in localStorage
-            const history = JSON.parse(localStorage.getItem('verificationHistory') || '[]');
-            history.unshift(analysisResult);
-            localStorage.setItem('verificationHistory', JSON.stringify(history));
-
-        } catch (error) {
-            console.error('Analysis failed:', error);
+        } catch (err) {
+            console.error('Analysis failed:', err);
+            setError(err.message);
         } finally {
             setIsAnalyzing(false);
         }
@@ -93,23 +97,21 @@ const VerifySignature = () => {
         setOriginalPreview(null);
         setTestPreview(null);
         setResult(null);
+        setError(null);
     };
 
     const UploadZone = ({ type, preview, inputRef, label }) => (
         <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-slate-200 mb-3">{label}</h3>
-
             {!preview ? (
                 <div
                     onDrop={(e) => handleDrop(e, type)}
                     onDragOver={(e) => e.preventDefault()}
-                    className="upload-zone h-80 flex flex-col items-center justify-center cursor-pointer"
+                    className="upload-zone h-80 flex flex-col items-center justify-center cursor-pointer border-2 border-dashed border-slate-700 rounded-xl hover:border-emerald-500 transition-colors"
                     onClick={() => inputRef.current?.click()}
                 >
                     <UploadCloud className="w-16 h-16 text-slate-600 mb-4" />
-                    <p className="text-slate-400 text-center mb-2">
-                        Drop your image here
-                    </p>
+                    <p className="text-slate-400 text-center mb-2">Drop your image here</p>
                     <p className="text-slate-600 text-sm mb-4">or click to browse</p>
                     <button className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors">
                         Select File
@@ -128,21 +130,12 @@ const VerifySignature = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     className="relative h-80 bg-slate-800 rounded-xl overflow-hidden border border-slate-700"
                 >
-                    <img
-                        src={preview}
-                        alt={`${type} signature`}
-                        className="w-full h-full object-contain"
-                    />
+                    <img src={preview} alt={`${type} signature`} className="w-full h-full object-contain" />
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (type === 'original') {
-                                setOriginalImage(null);
-                                setOriginalPreview(null);
-                            } else {
-                                setTestImage(null);
-                                setTestPreview(null);
-                            }
+                            if (type === 'original') { setOriginalImage(null); setOriginalPreview(null); }
+                            else { setTestImage(null); setTestPreview(null); }
                             setResult(null);
                         }}
                         className="absolute top-3 right-3 p-2 bg-red-500/90 hover:bg-red-600 text-white rounded-lg transition-colors"
@@ -157,49 +150,27 @@ const VerifySignature = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 lg:p-10">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8"
-                >
+                <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
                     <h1 className="text-4xl font-bold text-white mb-2">Signature Verification</h1>
                     <p className="text-slate-400 text-lg">Upload signatures to verify authenticity using AI-powered analysis</p>
                 </motion.div>
 
-                {/* Upload Zones */}
                 <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
+                    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
                     className="grid lg:grid-cols-2 gap-6 mb-6"
                 >
-                    <UploadZone
-                        type="original"
-                        preview={originalPreview}
-                        inputRef={originalInputRef}
-                        label="Original Reference Signature"
-                    />
-                    <UploadZone
-                        type="test"
-                        preview={testPreview}
-                        inputRef={testInputRef}
-                        label="Test Signature for Verification"
-                    />
+                    <UploadZone type="original" preview={originalPreview} inputRef={originalInputRef} label="Original Reference Signature" />
+                    <UploadZone type="test" preview={testPreview} inputRef={testInputRef} label="Test Signature for Verification" />
                 </motion.div>
 
-                {/* Action Buttons */}
                 <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
                     className="flex flex-wrap gap-4 justify-center mb-8"
                 >
                     <motion.button
                         onClick={runAnalysis}
                         disabled={!originalImage || !testImage || isAnalyzing}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                         className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-3"
                     >
                         <RefreshCw className={`w-5 h-5 ${isAnalyzing ? 'animate-spin' : ''}`} />
@@ -209,8 +180,7 @@ const VerifySignature = () => {
                     {(originalImage || testImage) && (
                         <motion.button
                             onClick={resetAnalysis}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
+                            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                             className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl transition-all duration-300"
                         >
                             Reset
@@ -218,13 +188,18 @@ const VerifySignature = () => {
                     )}
                 </motion.div>
 
-                {/* Loading State */}
+                {/* Error */}
+                {error && (
+                    <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400 text-center">
+                        ⚠️ {error}
+                    </div>
+                )}
+
+                {/* Loading */}
                 <AnimatePresence>
                     {isAnalyzing && (
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
+                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
                             className="bg-slate-900/50 backdrop-blur-xl rounded-2xl p-8 border border-slate-800 mb-8"
                         >
                             <div className="flex flex-col items-center">
@@ -243,27 +218,20 @@ const VerifySignature = () => {
                 <AnimatePresence>
                     {result && !isAnalyzing && (
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }}
                             className="bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-slate-800 overflow-hidden"
                         >
-                            {/* Result Header */}
-                            <div className={`p-6 ${
-                                result.status === 'GENUINE'
-                                    ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-b border-emerald-500/30'
-                                    : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-b border-red-500/30'
-                            }`}>
+                            <div className={`p-6 ${result.status === 'GENUINE'
+                                ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 border-b border-emerald-500/30'
+                                : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border-b border-red-500/30'}`}
+                            >
                                 <div className="flex items-center gap-4">
-                                    {result.status === 'GENUINE' ? (
-                                        <CheckCircle className="w-12 h-12 text-emerald-400" />
-                                    ) : (
-                                        <XCircle className="w-12 h-12 text-red-400" />
-                                    )}
+                                    {result.status === 'GENUINE'
+                                        ? <CheckCircle className="w-12 h-12 text-emerald-400" />
+                                        : <XCircle className="w-12 h-12 text-red-400" />
+                                    }
                                     <div>
-                                        <h2 className={`text-3xl font-bold ${
-                                            result.status === 'GENUINE' ? 'text-emerald-400' : 'text-red-400'
-                                        }`}>
+                                        <h2 className={`text-3xl font-bold ${result.status === 'GENUINE' ? 'text-emerald-400' : 'text-red-400'}`}>
                                             {result.status}
                                         </h2>
                                         <p className="text-slate-400 mt-1">
@@ -273,36 +241,19 @@ const VerifySignature = () => {
                                 </div>
                             </div>
 
-                            {/* Result Details */}
                             <div className="p-6">
                                 <div className="grid md:grid-cols-2 gap-6 mb-6">
-                                    {/* Confidence Score */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-slate-200 mb-4">Confidence Score</h3>
                                         <div className="flex items-center gap-4">
-                                            {/* Circular Progress */}
                                             <div className="relative w-32 h-32">
                                                 <svg className="transform -rotate-90 w-32 h-32">
-                                                    <circle
-                                                        cx="64"
-                                                        cy="64"
-                                                        r="56"
-                                                        stroke="currentColor"
-                                                        strokeWidth="8"
-                                                        fill="none"
-                                                        className="text-slate-700"
-                                                    />
-                                                    <circle
-                                                        cx="64"
-                                                        cy="64"
-                                                        r="56"
-                                                        stroke="currentColor"
-                                                        strokeWidth="8"
-                                                        fill="none"
-                                                        strokeDasharray={`${2 * Math.PI * 56}`}
-                                                        strokeDashoffset={`${2 * Math.PI * 56 * (1 - result.confidence / 100)}`}
-                                                        className={result.status === 'GENUINE' ? 'text-emerald-500' : 'text-red-500'}
-                                                        strokeLinecap="round"
+                                                    <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="none" className="text-slate-700" />
+                                                    <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="none"
+                                                            strokeDasharray={`${2 * Math.PI * 56}`}
+                                                            strokeDashoffset={`${2 * Math.PI * 56 * (1 - result.confidence / 100)}`}
+                                                            className={result.status === 'GENUINE' ? 'text-emerald-500' : 'text-red-500'}
+                                                            strokeLinecap="round"
                                                     />
                                                 </svg>
                                                 <div className="absolute inset-0 flex items-center justify-center">
@@ -313,24 +264,21 @@ const VerifySignature = () => {
                                                 <p className="text-slate-400 text-sm mb-2">
                                                     {result.status === 'GENUINE'
                                                         ? 'High probability the signatures match'
-                                                        : `${result.confidence}% probability of forgery detected`
-                                                    }
+                                                        : `${result.confidence}% probability of forgery detected`}
                                                 </p>
                                                 <div className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                                                    result.confidence >= 95
-                                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                                        : result.confidence >= 85
-                                                            ? 'bg-yellow-500/20 text-yellow-400'
-                                                            : 'bg-red-500/20 text-red-400'
-                                                }`}>
-                                                    {result.confidence >= 95 ? 'Very High Confidence' :
-                                                        result.confidence >= 85 ? 'High Confidence' : 'Moderate Confidence'}
+                                                    result.confidence >= 95 ? 'bg-emerald-500/20 text-emerald-400'
+                                                        : result.confidence >= 85 ? 'bg-yellow-500/20 text-yellow-400'
+                                                            : 'bg-red-500/20 text-red-400'}`}
+                                                >
+                                                    {result.confidence >= 95 ? 'Very High Confidence'
+                                                        : result.confidence >= 85 ? 'High Confidence' : 'Moderate Confidence'}
                                                 </div>
+                                                <p className="text-slate-500 text-xs mt-2">Distance: {result.distance}</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Comparison View */}
                                     <div>
                                         <h3 className="text-lg font-semibold text-slate-200 mb-4">Side-by-Side Comparison</h3>
                                         <div className="grid grid-cols-2 gap-2">
@@ -344,7 +292,6 @@ const VerifySignature = () => {
                                     </div>
                                 </div>
 
-                                {/* Additional Info */}
                                 <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                                     <h4 className="text-sm font-semibold text-slate-300 mb-2">Analysis Details</h4>
                                     <ul className="text-sm text-slate-400 space-y-1">
