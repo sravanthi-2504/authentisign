@@ -211,10 +211,10 @@ def verify_signature(current_user):
         # L2 distance
         distance = float(np.sqrt(np.sum((embed1 - embed2) ** 2)))
 
-# Cosine similarity (works because embeddings are L2 normalized)
+        # Cosine similarity (works because embeddings are L2 normalized)
         cosine_sim = float(np.dot(embed1, embed2))
 
-# Both must agree for GENUINE
+        # Both must agree for GENUINE
         L2_THRESHOLD = 0.30
         COSINE_THRESHOLD = 0.99  # cosine: 1.0 = identical, 0.0 = unrelated
 

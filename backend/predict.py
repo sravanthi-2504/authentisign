@@ -27,7 +27,7 @@ class Verifier:
             cv2.THRESH_BINARY, 11, 2
         )
 
-    # ✅ THIS WAS MISSING — must match training exactly
+        # ✅ THIS WAS MISSING — must match training exactly
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
 

@@ -9,12 +9,33 @@ import cv2
 import os
 from model.train_model import L2Normalization
 
-MODEL_PATH = "model/signature_embedding_model.keras"
+from tensorflow.keras.layers import Layer
+
+class AbsoluteLayer(Layer):
+    def __init__(self, **kwargs):
+        super(AbsoluteLayer, self).__init__(**kwargs)
+
+    def call(self, inputs):
+        return tf.math.abs(inputs)
+
+MODEL_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "backend", "signature_model_final.keras")
+)
 
 model = tf.keras.models.load_model(
-    MODEL_PATH, compile=False, safe_mode=False,
-    custom_objects={"L2Normalization": L2Normalization}
+    MODEL_PATH,
+    compile=False,
+    safe_mode=False,
+    custom_objects={
+        "L2Normalization": L2Normalization,
+        "AbsoluteLayer": AbsoluteLayer
+    }
 )
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DATASET_DIR = os.path.join(BASE_DIR, "dataset", "cedar_dataset")
+print("Model inputs:", len(model.inputs))
+print("Model output shape:", model.output_shape)
 
 def preprocess(path):
     img = cv2.imread(path, 0)
@@ -31,25 +52,34 @@ def preprocess(path):
 def get_distance(p1, p2):
     i1 = np.expand_dims(preprocess(p1), 0)
     i2 = np.expand_dims(preprocess(p2), 0)
-    e1 = model.predict(i1, verbose=0)[0]
-    e2 = model.predict(i2, verbose=0)[0]
-    return float(np.sqrt(np.sum((e1 - e2) ** 2)))
+
+    # Siamese model takes BOTH inputs together
+    prediction = model.predict([i1, i2])
+
+    # If model outputs similarity score (sigmoid)
+    return float(prediction)
 
 # ✅ Put paths to your known genuine pairs here
 genuine_pairs = [
-    ("dataset/cedar_dataset/full_org/original_18_1.png",
-     "dataset/cedar_dataset/full_org/original_18_2.png"),
-
-    ("dataset/cedar_dataset/full_org/original_29_1.png",
-     "dataset/cedar_dataset/full_org/original_29_2.png"),
+    (
+        os.path.join(DATASET_DIR, "full_org", "original_18_1.png"),
+        os.path.join(DATASET_DIR, "full_org", "original_18_2.png"),
+    ),
+    (
+        os.path.join(DATASET_DIR, "full_org", "original_29_1.png"),
+        os.path.join(DATASET_DIR, "full_org", "original_29_2.png"),
+    ),
 ]
 
 forged_pairs = [
-    ("dataset/cedar_dataset/full_org/original_18_1.png",
-     "dataset/cedar_dataset/full_forg/forgeries_18_1.png"),
-
-    ("dataset/cedar_dataset/full_org/original_29_1.png",
-     "dataset/cedar_dataset/full_forg/forgeries_29_1.png"),
+    (
+        os.path.join(DATASET_DIR, "full_org", "original_18_1.png"),
+        os.path.join(DATASET_DIR, "full_forg", "forgeries_18_1.png"),
+    ),
+    (
+        os.path.join(DATASET_DIR, "full_org", "original_29_1.png"),
+        os.path.join(DATASET_DIR, "full_forg", "forgeries_29_1.png"),
+    ),
 ]
 
 print("\n--- GENUINE PAIRS (distances should be LOW) ---")
