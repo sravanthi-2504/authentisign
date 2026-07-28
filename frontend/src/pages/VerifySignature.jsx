@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, CheckCircle, XCircle, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const API_URL = 'http://127.0.0.1:5001';
+const API_URL = 'http://127.0.0.1:5000';
 
 const VerifySignature = () => {
     const [originalImage, setOriginalImage] = useState(null);
