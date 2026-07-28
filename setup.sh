@@ -59,14 +59,17 @@ echo ""
 
 # Train Model
 echo "=========================================="
-echo "Training ML Model..."
+echo "Checking ML Model..."
 echo "=========================================="
 cd ../model
 
-echo -e "${YELLOW}Note: This may take 15-30 minutes...${NC}"
-python train_model.py
-
-echo -e "${GREEN}✓ Model training complete${NC}"
+if [ -f "signature_embedding_model.keras" ]; then
+    echo -e "${GREEN}✓ Pre-trained model found — skipping training${NC}"
+else
+    echo -e "${YELLOW}No trained model found. Training now (15-30 min)...${NC}"
+    python train_model.py
+    echo -e "${GREEN}✓ Model training complete${NC}"
+fi
 echo ""
 
 # Setup Frontend
